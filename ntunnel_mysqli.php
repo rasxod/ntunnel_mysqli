@@ -13,24 +13,37 @@
 *
 */
 
-define('DEBUG_MODE', FALSE);
+define('DEBUG_MODE', true);
 
 //set allowTestMenu to false to disable System/Server test page
 $allowTestMenu = true;
 $testMenu = false;
 
 if (DEBUG_MODE) {
-	//trigger_error("Custom user notice", E_USER_NOTICE);
-	error_log('POST Array: '.print_r($_POST, true));
-	error_reporting(E_ALL);
-	set_time_limit(5);
+    ini_set('display_errors', 0); // Не показываем ошибки в ответе
+    error_reporting(E_ALL);
+    set_time_limit(5);
 } else {
-	error_reporting(0);
-	set_time_limit(0);
+    error_reporting(0);
+    set_time_limit(0);
 }
-//set_magic_quotes_runtime(0);
 
 header("Content-Type: text/plain; charset=x-user-defined");
+
+// Функция для записи логов в файл
+function log_debug($message) {
+    $timestamp = date('Y-m-d H:i:s');
+    $log_message = "[" . $timestamp . "] " . $message . "\n";
+    file_put_contents(dirname(__FILE__) . '/debug_ntunnel.log', $log_message, FILE_APPEND | LOCK_EX);
+}
+
+// Логируем последние ошибки PHP
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error) {
+        log_debug("PHP ERROR: " . $error['message'] . " in " . $error['file'] . " on line " . $error['line']);
+    }
+});
 
 function phpversion_int()
 {
@@ -74,7 +87,7 @@ function EchoHeader($errno)
 	$str .= GetShortBinary(201);
 	$str .= GetLongBinary($errno);
 	if (DEBUG_MODE) {
-		error_log('EchoHeader ($errno): '.$errno);
+		log_debug('EchoHeader ($errno): '.$errno);
 	}
 	$str .= GetDummy(6);
 	echo $str;
@@ -84,16 +97,17 @@ function EchoConnInfo($conn)
 {
 	$str = GetBlock(mysqli_get_host_info($conn));
 	if (DEBUG_MODE) {
-		error_log('EchoConnInfo (mysqli_get_host_info($conn)): '.mysqli_get_host_info($conn));
+		log_debug('EchoConnInfo (mysqli_get_host_info($conn)): '.mysqli_get_host_info($conn));
 	}
 	$str .= GetBlock(mysqli_get_proto_info($conn));
 	if (DEBUG_MODE) {
-		error_log('EchoConnInfo (mysqli_get_proto_info($conn)): '.mysqli_get_proto_info($conn));
+		log_debug('EchoConnInfo (mysqli_get_proto_info($conn)): '.mysqli_get_proto_info($conn));
 	}
 	$str .= GetBlock(mysqli_get_server_info($conn));
 	if (DEBUG_MODE) {
-		error_log('EchoConnInfo (mysqli_get_server_info($conn)): '.mysqli_get_server_info($conn));
+		log_debug('EchoConnInfo (mysqli_get_server_info($conn)): '.mysqli_get_server_info($conn));
 	}
+
 	echo $str;
 }
 
@@ -101,23 +115,23 @@ function EchoResultSetHeader($errno, $affectrows, $insertid, $numfields, $numrow
 {
 	$str = GetLongBinary($errno);
 	if (DEBUG_MODE) {
-		error_log('EchoResultSetHeader ($errno): '.$errno);
+		log_debug('EchoResultSetHeader ($errno): '.$errno);
 	}
 	$str .= GetLongBinary($affectrows);
 	if (DEBUG_MODE) {
-		error_log('EchoResultSetHeader ($affectrows): '.$affectrows);
+		log_debug('EchoResultSetHeader ($affectrows): '.$affectrows);
 	}
 	$str .= GetLongBinary($insertid);
 	if (DEBUG_MODE) {
-		error_log('EchoResultSetHeader ($insertid): '.$insertid);
+		log_debug('EchoResultSetHeader ($insertid): '.$insertid);
 	}
 	$str .= GetLongBinary($numfields);
 	if (DEBUG_MODE) {
-		error_log('EchoResultSetHeader ($numfields): '.$numfields);
+		log_debug('EchoResultSetHeader ($numfields): '.$numfields);
 	}
 	$str .= GetLongBinary($numrows);
 	if (DEBUG_MODE) {
-		error_log('EchoResultSetHeader ($numrows): '.$numrows);
+		log_debug('EchoResultSetHeader ($numrows): '.$numrows);
 	}
 	$str .= GetDummy(12);
 	echo $str;
@@ -130,26 +144,26 @@ function EchoFieldsHeader($res, $numfields)
 		$finfo = mysqli_fetch_field_direct($res, $i);
 		$str .= GetBlock($finfo->name);
 		if (DEBUG_MODE) {
-			error_log('EchoFieldsHeader ($finfo->name): '.$finfo->name);
+			log_debug('EchoFieldsHeader ($finfo->name): '.$finfo->name);
 		}
 		$str .= GetBlock($finfo->table);
 		if (DEBUG_MODE) {
-			error_log('EchoFieldsHeader ($finfo->table): '.$finfo->table);
+			log_debug('EchoFieldsHeader ($finfo->table): '.$finfo->table);
 		}
 
 		$str .= GetLongBinary($finfo->type);
 		if (DEBUG_MODE) {
-			error_log('EchoFieldsHeader ($finfo->type): '.$finfo->type);
+			log_debug('EchoFieldsHeader ($finfo->type): '.$finfo->type);
 		}
 
 		$str .= GetLongBinary($finfo->flags);
 		if (DEBUG_MODE) {
-			error_log('EchoFieldsHeader ($finfo->flags): '.$finfo->flags);
+			log_debug('EchoFieldsHeader ($finfo->flags): '.$finfo->flags);
 		}
 
 		$str .= GetLongBinary($finfo->length);
 		if (DEBUG_MODE) {
-			error_log('EchoFieldsHeader ($finfo->length): '.$finfo->length);
+			log_debug('EchoFieldsHeader ($finfo->length): '.$finfo->length);
 		}
 	}
 	echo $str;
@@ -166,7 +180,7 @@ function EchoData($res, $numfields, $numrows)
 			} else {
 				$str .= GetBlock($row[$j]);
 				if (DEBUG_MODE) {
-					error_log('EchoData ($row['.$j.']): '.$row[$j]);
+					log_debug('EchoData ($row['.$j.']): '.$row[$j]);
 				}
 			}
 		}
@@ -195,7 +209,7 @@ if (!isset($_POST["actn"]) || !isset($_POST["host"]) || !isset($_POST["port"]) |
 }
 
 if (!$testMenu){
-	if ($_POST["encodeBase64"] == '1') {
+	if (@$_POST["encodeBase64"] == '1') {
 		for($i=0;$i<count($_POST["q"]);$i++)
 			$_POST["q"][$i] = base64_decode($_POST["q"][$i]);
 	}
@@ -209,11 +223,26 @@ if (!$testMenu){
 	$errno_c = 0;
 	$hs = $_POST["host"];
 	if( $_POST["port"] ) $hs .= ":".$_POST["port"];
+
+	// Debug connection attempt
+	log_debug("POST Data: ".print_r($_POST, true));
+	log_debug("Attempting connection to host: $hs with login: ".$_POST["login"]);
+
 	$conn = mysqli_connect($hs, $_POST["login"], $_POST["password"]);
 	$errno_c = mysqli_connect_errno();
+
+	if($errno_c > 0) {
+		log_debug("mysqli_connect failed: ".mysqli_connect_error()." (errno: $errno_c)");
+	}
+
 	if(($errno_c <= 0) && ( $_POST["db"] != "" )) {
-		$res = mysqli_select_db($conn, $_POST["db"]);
+		$db_selected = mysqli_select_db($conn, $_POST["db"]);
 		$errno_c = mysqli_errno($conn);
+		if ($errno_c > 0) {
+			log_debug("mysqli_select_db failed: ".mysqli_error($conn)." (errno: $errno_c)");
+		} else {
+			log_debug("mysqli_select_db success: ".$_POST["db"]);
+		}
 	}
 
 	EchoHeader($errno_c);
@@ -225,11 +254,14 @@ if (!$testMenu){
 		for($i=0;$i<count($_POST["q"]);$i++) {
 			$query = $_POST["q"][$i];
 			if($query == "") continue;
-			if(get_magic_quotes_gpc())
-				$query = stripslashes($query);
+			$query = stripslashes($query);
+			log_debug("Executing query: $query");
 			$resSet = false;
 			$res = mysqli_query($conn, $query);
 			$errno = mysqli_errno($conn);
+			if ($errno > 0) {
+				log_debug("Query failed: ".mysqli_error($conn)." (errno: $errno)");
+			}
 			if ($res === TRUE) {
 				$affectedrows = 0;
 				$insertid = 0;
@@ -268,8 +300,6 @@ if (!$testMenu){
 	exit();
 }
 
-
-
 function doSystemTest()
 {
 	function output($description, $succ, $resStr) {
@@ -279,8 +309,8 @@ function doSystemTest()
 	output("PHP version >= 4.0.5", phpversion_int() >= 40005, array("Yes", "No"));
 	output("mysqli_connect() available", function_exists("mysqli_connect"), array("Yes", "No"));
 	if (phpversion_int() >= 40302 && substr($_SERVER["SERVER_SOFTWARE"], 0, 6) == "Apache"){
-		if (in_array("mod_security2", apache_get_modules()))
-			output("Mod Security 2 installed", false, array("No", "Yes"));
+		// if (in_array("mod_security2", apache_get_modules()))
+		// 	output("Mod Security 2 installed", false, array("No", "Yes"));
 	}
 }
 
